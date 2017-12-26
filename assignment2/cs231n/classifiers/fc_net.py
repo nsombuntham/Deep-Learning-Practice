@@ -179,6 +179,9 @@ class FullyConnectedNet(object):
         for hidden_dim in hidden_dims:
             self.params['W'+str(cnt)] = weight_scale * np.random.randn(prev_dim, hidden_dim)
             self.params['b'+str(cnt)] = np.zeros(hidden_dim)
+            if self.use_batchnorm:
+                self.params['gamma'+str(cnt)] = np.ones(hidden_dim)
+                self.params['beta'+str(cnt)] = np.zeros(hidden_dim)
             prev_dim = hidden_dim
             cnt += 1
         self.params['W'+str(cnt)] = weight_scale * np.random.randn(prev_dim, num_classes)
@@ -244,9 +247,11 @@ class FullyConnectedNet(object):
         in_vec = X
         for cnt in range(1,self.num_layers):
             out, caches['lay'+str(cnt)] = affine_forward(in_vec, self.params['W'+str(cnt)], self.params['b'+str(cnt)])
-            # batch norm
+            if self.use_batchnorm:
+                out, caches['bn'+str(cnt)] = batchnorm_forward(out, self.params['gamma'+str(cnt)], self.params['beta'+str(cnt)], self.bn_params[cnt-1])
             out, caches['relu'+str(cnt)] = relu_forward(out)
-            # dropout
+            if self.use_dropout:
+                out, caches['dropout'+str(cnt)] = dropout_forward(out,self.dropout_param)
             in_vec = out
         cnt = self.num_layers
         scores, caches['lay'+str(cnt)] = affine_forward(in_vec, self.params['W'+str(cnt)], self.params['b'+str(cnt)])
@@ -280,9 +285,11 @@ class FullyConnectedNet(object):
         dx, grads['W'+cnt], grads['b'+cnt] = affine_backward(dx, caches['lay'+cnt])
         for i in range(self.num_layers-1, 0, -1):
             cnt = str(i)
-            # dropout
+            if self.use_dropout:
+                dx = dropout_backward(dx, caches['dropout'+cnt])
             dx = relu_backward(dx,caches['relu'+cnt])
-            # bn
+            if self.use_batchnorm:
+                dx, grads['gamma'+cnt], grads['beta'+cnt] = batchnorm_backward(dx, caches['bn'+cnt])
             dx, grads['W'+cnt], grads['b'+cnt] = affine_backward(dx, caches['lay'+cnt])
 
         for i in range(1, self.num_layers + 1):
